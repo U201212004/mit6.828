@@ -26,9 +26,28 @@ static struct Command commands[] = {
 	{ "help", "Display this list of commands", mon_help },
 	{ "kerninfo", "Display information about the kernel", mon_kerninfo },
     {"backtrace", "Backtrace the call of functions", mon_backtrace },
+    {"step","set the TF bit of eflags, enter into single-step mode", mon_step},
+    {"continue", "clear the TF bit of eflags to continue execution", mon_continue}
 };
 
 /***** Implementations of basic kernel monitor commands *****/
+int mon_step(int argc, char **argv, struct Trapframe *tf)
+{
+    if(!(tf && (tf->tf_trapno == T_DEBUG || tf->tf_trapno == T_BRKPT) && 
+        (tf->tf_cs & 3) == 3))
+        return 0;
+    tf->tf_eflags |= FL_TF;
+    return -1;
+}
+
+int mon_continue(int argc, char **argv, struct Trapframe *tf)
+{
+    if (!(tf && (tf->tf_trapno == T_DEBUG || tf->tf_trapno == T_BRKPT) && 
+              ((tf->tf_cs & 3) == 3)))
+        return 0;
+    tf->tf_eflags &= ~FL_TF;
+    return -1;
+}
 
 int
 mon_help(int argc, char **argv, struct Trapframe *tf)
