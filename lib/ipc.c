@@ -23,8 +23,21 @@ int32_t
 ipc_recv(envid_t *from_env_store, void *pg, int *perm_store)
 {
 	// LAB 4: Your code here.
-	panic("ipc_recv not implemented");
-	return 0;
+	int r;
+    //pg不为null,传送页面，否则传值
+    if(pg == NULL)
+        r = sys_ipc_recv((void *)UTOP);
+    else
+        r = sys_ipc_recv(pg);
+    //如果from_env_store不为null,保存ipc发送者id
+    if(from_env_store != NULL)
+        *from_env_store = r < 0 ? 0 : thisenv->env_ipc_from;
+    //如果perm_store不为NULL,保存发送者的perm
+    if(perm_store != NULL)
+        *perm_store = r < 0 ? 0 : thisenv->env_ipc_perm;
+    if(r < 0)
+        return r;
+    return thisenv->env_ipc_value;
 }
 
 // Send 'val' (and 'pg' with 'perm', if 'pg' is nonnull) to 'toenv'.
@@ -39,7 +52,14 @@ void
 ipc_send(envid_t to_env, uint32_t val, void *pg, int perm)
 {
 	// LAB 4: Your code here.
-	panic("ipc_send not implemented");
+	int r;
+    void *dstpg;
+    dstpg = pg ? pg : (void *)UTOP;
+    while((r = sys_ipc_try_send(to_env, val, dstpg, perm)) < 0){
+        if(r != -E_IPC_NOT_RECV)
+            panic("ipc_send:send message error:%e\n", r);
+        sys_yield();
+    }
 }
 
 // Find the first environment of the given type.  We'll use this to
