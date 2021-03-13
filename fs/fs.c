@@ -62,7 +62,15 @@ alloc_block(void)
 	// super->s_nblocks blocks in the disk altogether.
 
 	// LAB 5: Your code here.
-	panic("alloc_block not implemented");
+	uint32_t blockno;
+
+    for(blockno = 0; blockno < super->s_nblocks; blockno++){
+        if(block_is_free(blockno)){
+            bitmap[blockno/32] &= ~(1<<(blockno%32));
+            flush_block(&bitmap[blockno/32]);
+            return blockno;
+        }
+    }
 	return -E_NO_DISK;
 }
 
@@ -134,8 +142,33 @@ fs_init(void)
 static int
 file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool alloc)
 {
-       // LAB 5: Your code here.
-       panic("file_block_walk not implemented");
+    // LAB 5: Your code here.
+    //filebno超过文件块数极限
+    if(filebno >= NDIRECT + NINDIRECT)
+        return -E_INVAL;
+    if(ppdiskbno == NULL)
+        return 0;
+
+    //filebno在直接索引块内
+    if(filebno < NDIRECT){
+        *ppdiskbno = f->f_direct + filebno;
+        return 0;
+    }
+    //filebno在间接索引块中
+    //如果需要分配间接索引块，但是alloc=0不允许分配
+    if(!alloc && !f->f_indirect)
+        return -E_NOT_FOUND;
+    //alloc=1,f->f_indirect不存在，就创建一个块
+    if(!f->f_indirect){
+        uint32_t blockno;
+        if((blockno = alloc_block()) < 0)
+            return -E_NO_DISK;
+        f->f_indirect = blockno;
+        memset(diskaddr(blockno), 0, BLKSIZE);
+        flush_block(diskaddr(blockno));
+    }
+    *ppdiskbno = (uint32_t*)diskaddr(f->f_indirect)+filebno-NDIRECT;
+    return 0;
 }
 
 // Set *blk to the address in memory where the filebno'th
@@ -149,8 +182,22 @@ file_block_walk(struct File *f, uint32_t filebno, uint32_t **ppdiskbno, bool all
 int
 file_get_block(struct File *f, uint32_t filebno, char **blk)
 {
-       // LAB 5: Your code here.
-       panic("file_get_block not implemented");
+    // LAB 5: Your code here.
+    int r;
+    uint32_t *ppdiskbno;
+    if((r = file_block_walk(f, filebno, &ppdiskbno, 1)) < 0)
+        return r;
+    //文件块未分配，不要问alloc=1为什么会未分配
+    //文件块和indirect块不一样
+    if(*ppdiskbno == 0){
+        if((r = alloc_block()) < 0)
+            return -E_NO_DISK;
+        *ppdiskbno = r;
+        memset(diskaddr(r), 0, BLKSIZE);
+        flush_block(diskaddr(r));
+    }
+    *blk = diskaddr(*ppdiskbno);
+    return 0;
 }
 
 // Try to find a file named "name" in dir.  If so, set *file to it.
